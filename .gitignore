@@ -1,0 +1,5 @@
+/target
+/.kiro
+.env
+
+Cargo.lock

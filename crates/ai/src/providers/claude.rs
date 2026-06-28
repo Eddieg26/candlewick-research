@@ -24,6 +24,7 @@ impl AiProvider for ClaudeProvider {
         let response = self
             .http
             .post(&url)
+            .header("Content-Type", "application/json")
             .header("anthropic-version", "2023-06-01")
             .header("X-Api-Key", &self.api_key)
             .body(body)
@@ -46,7 +47,8 @@ impl AiProvider for ClaudeProvider {
         let response = self
             .http
             .get(&url)
-            .header("Authorization: Bearer", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("X-Api-Key", &self.api_key)
             .send()
             .await?
             .check()

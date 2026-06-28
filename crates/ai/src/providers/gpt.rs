@@ -24,6 +24,7 @@ impl AiProvider for GptProvider {
         let response = self
             .http
             .post(&url)
+            .header("Content-Type", "application/json")
             .header("Authorization: Bearer", &self.api_key)
             .body(body)
             .send()

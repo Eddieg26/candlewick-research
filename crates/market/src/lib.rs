@@ -6,7 +6,3 @@ pub mod types;
 
 pub use ext::*;
 pub use types::*;
-
-fn main() {
-    println!("Hello, world!");
-}

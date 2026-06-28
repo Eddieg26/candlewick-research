@@ -1,5 +1,5 @@
 use crate::{
-    Asset, Candle, Market, Ticker, Timeframe,
+    Asset, Candle, Market, ResponseExt, Ticker, Timeframe,
     aggregator::CandleAggregator,
     error::MarketError,
     providers::{LiveStream, MarketDataProvider, TickerUpdate},
@@ -29,9 +29,9 @@ impl MarketDataProvider for TiingoProvider {
                 ("token", &self.api_key),
             ])
             .send()
+            .await?
+            .check()
             .await?;
-
-        let response = Self::check_response(response).await?;
 
         let mut results = response.json::<Vec<TiingoSearchResult>>().await?;
 
@@ -102,26 +102,6 @@ impl MarketDataProvider for TiingoProvider {
 }
 
 impl TiingoProvider {
-    /// Check the HTTP response status and map error codes to typed errors.
-    /// Returns the response unchanged if the status is successful.
-    async fn check_response(resp: reqwest::Response) -> Result<reqwest::Response, MarketError> {
-        let status = resp.status();
-        if status.is_success() {
-            return Ok(resp);
-        }
-        match status.as_u16() {
-            401 => Err(MarketError::Unauthorized),
-            429 => Err(MarketError::RateLimited),
-            code => {
-                let body = resp.text().await.unwrap_or_default();
-                Err(MarketError::HttpError {
-                    status: code,
-                    message: body,
-                })
-            }
-        }
-    }
-
     /// Fetch daily historical price bars for a symbol.
     pub async fn daily_prices(
         &self,
@@ -141,9 +121,9 @@ impl TiingoProvider {
                 ("token", self.api_key.as_str()),
             ])
             .send()
+            .await?
+            .check()
             .await?;
-
-        let response = Self::check_response(response).await?;
 
         response
             .json::<Vec<PriceBar>>()
@@ -180,9 +160,9 @@ impl TiingoProvider {
                 ("token", self.api_key.as_str()),
             ])
             .send()
+            .await?
+            .check()
             .await?;
-
-        let response = Self::check_response(response).await?;
 
         response
             .json::<Vec<PriceBar>>()

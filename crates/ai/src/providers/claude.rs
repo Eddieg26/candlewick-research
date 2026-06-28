@@ -7,24 +7,25 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-pub struct GptProvider {
+pub struct ClaudeProvider {
     http: reqwest::Client,
     api_key: String,
 }
 
-impl GptProvider {
-    pub const BASE_URL: &'static str = "https://api.openai.com/v1";
+impl ClaudeProvider {
+    pub const BASE_URL: &'static str = "https://api.anthropic.com/v1";
 }
 
-impl AiProvider for GptProvider {
+impl AiProvider for ClaudeProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, AiError> {
         let url = format!("{}/responses", Self::BASE_URL);
-        let body = serde_json::to_string(&GptChatRequest::from(request))?;
+        let body = serde_json::to_string(&ClaudeChatRequest::from(request))?;
 
         let response = self
             .http
             .post(&url)
-            .header("Authorization: Bearer", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .header("X-Api-Key", &self.api_key)
             .body(body)
             .send()
             .await?
@@ -32,7 +33,7 @@ impl AiProvider for GptProvider {
             .await?;
 
         let response = response
-            .json::<GptChatResponse>()
+            .json::<ClaudeChatResponse>()
             .await
             .map(ChatResponse::from)?;
 
@@ -51,38 +52,38 @@ impl AiProvider for GptProvider {
             .check()
             .await?;
 
-        let response = response.json::<GptModelResponse>().await?;
+        let response = response.json::<ClaudeModelResponse>().await?;
 
         Ok(response.data.into_iter().map(|o| o.id).collect())
     }
 }
 
 #[derive(Serialize)]
-pub struct GptChatRequest {
+pub struct ClaudeChatRequest {
     pub model: String,
-    pub input: Vec<GptChatRequestInput>,
+    pub messages: Vec<ClaudeChatRequestInput>,
 }
 
-impl From<ChatRequest> for GptChatRequest {
+impl From<ChatRequest> for ClaudeChatRequest {
     fn from(value: ChatRequest) -> Self {
         Self {
             model: value.model,
-            input: value
+            messages: value
                 .input
                 .into_iter()
-                .map(GptChatRequestInput::from)
+                .map(ClaudeChatRequestInput::from)
                 .collect(),
         }
     }
 }
 
 #[derive(Serialize)]
-pub struct GptChatRequestInput {
+pub struct ClaudeChatRequestInput {
     pub role: String,
     pub content: String,
 }
 
-impl From<ChatRequestInput> for GptChatRequestInput {
+impl From<ChatRequestInput> for ClaudeChatRequestInput {
     fn from(value: ChatRequestInput) -> Self {
         Self {
             role: value.role,
@@ -92,22 +93,21 @@ impl From<ChatRequestInput> for GptChatRequestInput {
 }
 
 #[derive(Deserialize)]
-pub struct GptChatResponse {
-    pub output: Vec<GptChatResponseOutput>,
-    pub usage: GptUsageMetrics,
+pub struct ClaudeChatResponse {
+    pub role: String,
+    pub content: Vec<ClaudeChatResponseOutput>,
+    pub usage: ClaudeUsageMetrics,
 }
 
-impl From<GptChatResponse> for ChatResponse {
-    fn from(value: GptChatResponse) -> Self {
+impl From<ClaudeChatResponse> for ChatResponse {
+    fn from(value: ClaudeChatResponse) -> Self {
         let mut messages = Vec::new();
 
-        for output in value.output {
-            for content in output.content {
-                messages.push(ChatMessage {
-                    role: output.role.clone(),
-                    content: content.text,
-                });
-            }
+        for output in value.content {
+            messages.push(ChatMessage {
+                role: value.role.clone(),
+                content: output.text,
+            });
         }
 
         Self {
@@ -118,25 +118,18 @@ impl From<GptChatResponse> for ChatResponse {
 }
 
 #[derive(Deserialize)]
-pub struct GptChatResponseOutput {
-    pub role: String,
-    pub content: Vec<GptChatContent>,
-}
-
-#[derive(Deserialize)]
-pub struct GptChatContent {
+pub struct ClaudeChatResponseOutput {
     pub text: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GptUsageMetrics {
+#[derive(Deserialize)]
+pub struct ClaudeUsageMetrics {
     pub input_tokens: u32,
     pub output_tokens: u32,
-    pub total_tokens: u32,
 }
 
-impl From<GptUsageMetrics> for UsageMetrics {
-    fn from(value: GptUsageMetrics) -> Self {
+impl From<ClaudeUsageMetrics> for UsageMetrics {
+    fn from(value: ClaudeUsageMetrics) -> Self {
         Self {
             input_tokens: value.input_tokens,
             output_tokens: value.output_tokens,
@@ -145,11 +138,12 @@ impl From<GptUsageMetrics> for UsageMetrics {
 }
 
 #[derive(Deserialize)]
-pub struct GptModelResponse {
-    data: Vec<GptModelOutput>,
+pub struct ClaudeModelResponse {
+    pub data: Vec<ClaudeModelOutput>,
 }
 
 #[derive(Deserialize)]
-pub struct GptModelOutput {
-    id: String,
+pub struct ClaudeModelOutput {
+    pub id: String,
+    pub display_name: String,
 }

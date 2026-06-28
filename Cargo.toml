@@ -5,6 +5,6 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = ["crates/finage","crates/finnhub", "crates/market", "crates/massive", "crates/tiingo"]
+members = ["crates/market", "crates/massive", "crates/tiingo"]
 
 [dependencies]

@@ -19,7 +19,7 @@ pub struct TiingoProvider {
 impl MarketDataProvider for TiingoProvider {
     type LiveStream = TiingoLiveStream;
 
-    async fn search(&self, ticker: &Ticker) -> Result<Vec<Asset>, MarketError> {
+    async fn search(&self, ticker: &Ticker, _: Market) -> Result<Option<Asset>, MarketError> {
         let response = self
             .http
             .get("https://api.tiingo.com/tiingo/utilities/search")
@@ -33,17 +33,20 @@ impl MarketDataProvider for TiingoProvider {
 
         let response = Self::check_response(response).await?;
 
-        Ok(response
-            .json::<Vec<TiingoSearchResult>>()
-            .await?
-            .drain(..)
-            .map(Asset::from)
-            .collect())
+        let mut results = response.json::<Vec<TiingoSearchResult>>().await?;
+
+        let index = match results.iter().position(|r| &r.ticker == ticker) {
+            Some(index) => index,
+            None => return Ok(None),
+        };
+
+        return Ok(Some(Asset::from(results.remove(index))));
     }
 
     async fn candles(
         &self,
         ticker: &Ticker,
+        market: Market,
         timeframe: Timeframe,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
@@ -62,7 +65,8 @@ impl MarketDataProvider for TiingoProvider {
                     Timeframe::H4 => "4hour",
                     Timeframe::D1 => unreachable!(),
                 };
-                self.intraday_prices(ticker, frequency, &from_str, &to_str).await
+                self.intraday_prices(ticker, market, frequency, &from_str, &to_str)
+                    .await
             }
         }?;
 
@@ -151,14 +155,22 @@ impl TiingoProvider {
     pub async fn intraday_prices(
         &self,
         ticker: &Ticker,
+        market: Market,
         frequency: &str,
         from: &str,
         to: &str,
     ) -> Result<Vec<PriceBar>, MarketError> {
+        let market = match market {
+            Market::Forex => "fx",
+            Market::Stock => "iex",
+            Market::Crypto => "crypto",
+        };
+
         let response = self
             .http
             .get(format!(
-                "https://api.tiingo.com/iex/{}/prices",
+                "https://api.tiingo.com/{}/{}/prices",
+                market,
                 ticker.as_str()
             ))
             .query(&[
@@ -234,8 +246,8 @@ impl TiingoLiveStream {
         subscriber: impl Fn(Vec<TickerUpdate>) + Send + 'static,
     ) -> Result<TiingoLiveStream, MarketError> {
         let url = match market {
-            Market::Forex => format!("{}/forex", Self::BASE_URL),
-            Market::Stock => format!("{}/stock", Self::BASE_URL),
+            Market::Forex => format!("{}/fx", Self::BASE_URL),
+            Market::Stock => format!("{}/iex", Self::BASE_URL),
             Market::Crypto => format!("{}/crypto", Self::BASE_URL),
         };
 
@@ -265,7 +277,7 @@ impl TiingoLiveStream {
                     Some(Err(_)) => {
                         break;
                     }
-                    None => todo!(),
+                    None => continue,
                 };
 
                 let Message::Text(text) = message else {

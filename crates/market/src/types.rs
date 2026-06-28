@@ -7,6 +7,10 @@ use std::ops::Deref;
 pub struct Ticker(SmolStr);
 
 impl Ticker {
+    pub fn prefix(&self, prefix: &str) -> Self {
+        Self(format!("{}{}", prefix, self.0).into())
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -32,12 +36,20 @@ impl From<&str> for Ticker {
     }
 }
 
+impl From<String> for Ticker {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Market {
     Forex,
     Stock,
     Crypto,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Timeframe {
     M1,
     M5,

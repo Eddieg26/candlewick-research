@@ -17,11 +17,13 @@ pub trait MarketDataProvider: Send + Sync + 'static {
     fn search(
         &self,
         ticker: &Ticker,
-    ) -> impl Future<Output = Result<Vec<Asset>, MarketError>> + Send;
+        market: Market,
+    ) -> impl Future<Output = Result<Option<Asset>, MarketError>> + Send;
 
     fn candles(
         &self,
         ticker: &Ticker,
+        market: Market,
         timeframe: Timeframe,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
@@ -46,11 +48,16 @@ impl<T: LiveStream> ErasedLiveStream for T {
 }
 
 pub trait ErasedMarketDataProvider: Send + Sync + 'static {
-    fn search<'a>(&'a self, ticker: &'a Ticker) -> BoxFuture<'a, Result<Vec<Asset>, MarketError>>;
+    fn search<'a>(
+        &'a self,
+        ticker: &'a Ticker,
+        market: Market,
+    ) -> BoxFuture<'a, Result<Option<Asset>, MarketError>>;
 
     fn candles<'a>(
         &'a self,
         ticker: &'a Ticker,
+        market: Market,
         timeframe: Timeframe,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
@@ -65,19 +72,24 @@ pub trait ErasedMarketDataProvider: Send + Sync + 'static {
 }
 
 impl<T: MarketDataProvider> ErasedMarketDataProvider for T {
-    fn search<'a>(&'a self, ticker: &'a Ticker) -> BoxFuture<'a, Result<Vec<Asset>, MarketError>> {
-        Box::pin(async { <T as MarketDataProvider>::search(self, ticker).await })
+    fn search<'a>(
+        &'a self,
+        ticker: &'a Ticker,
+        market: Market,
+    ) -> BoxFuture<'a, Result<Option<Asset>, MarketError>> {
+        Box::pin(async move { <T as MarketDataProvider>::search(self, ticker, market).await })
     }
 
     fn candles<'a>(
         &'a self,
         ticker: &'a Ticker,
+        market: Market,
         timeframe: Timeframe,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
     ) -> BoxFuture<'a, Result<Vec<Candle>, MarketError>> {
         Box::pin(async move {
-            <T as MarketDataProvider>::candles(self, ticker, timeframe, from, to).await
+            <T as MarketDataProvider>::candles(self, ticker, market, timeframe, from, to).await
         })
     }
 
@@ -87,7 +99,7 @@ impl<T: MarketDataProvider> ErasedMarketDataProvider for T {
         tickers: &'a [Ticker],
         subscriber: Box<dyn Fn(Vec<TickerUpdate>) + Send + 'static>,
     ) -> BoxFuture<'a, Result<Box<dyn ErasedLiveStream>, MarketError>> {
-        Box::pin(async {
+        Box::pin(async move {
             <T as MarketDataProvider>::stream(self, market, tickers, subscriber)
                 .await
                 .map(|v| Box::new(v) as Box<dyn ErasedLiveStream>)
